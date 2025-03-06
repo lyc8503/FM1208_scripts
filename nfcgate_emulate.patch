@@ -1,0 +1,70 @@
+diff --git a/app/src/main/java/de/tu_darmstadt/seemoo/nfcgate/nfc/modes/CloneMode.java b/app/src/main/java/de/tu_darmstadt/seemoo/nfcgate/nfc/modes/CloneMode.java
+index 1366b6d..90aa64f 100644
+--- a/app/src/main/java/de/tu_darmstadt/seemoo/nfcgate/nfc/modes/CloneMode.java
++++ b/app/src/main/java/de/tu_darmstadt/seemoo/nfcgate/nfc/modes/CloneMode.java
+@@ -1,5 +1,6 @@
+ package de.tu_darmstadt.seemoo.nfcgate.nfc.modes;
+ 
++import android.util.Log;
+ import de.tu_darmstadt.seemoo.nfcgate.network.data.NetworkStatus;
+ import de.tu_darmstadt.seemoo.nfcgate.util.NfcComm;
+ 
+@@ -16,10 +17,56 @@ public class CloneMode extends BaseMode {
+         mManager.resetConfig();
+     }
+ 
++    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
++    private static String bytesToHex(byte[] bytes) {
++        char[] hexChars = new char[bytes.length * 2];
++        for (int j = 0; j < bytes.length; j++) {
++            int v = bytes[j] & 0xFF;
++            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
++            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
++        }
++        return new String(hexChars);
++    }
++
+     @Override
+     public void onData(boolean isForeign, NfcComm data) {
+-        // clone tag, also disables polling
+-        mManager.applyData(data);
++        Log.d("OnCloneTagData", bytesToHex(data.getData()));
++        byte[] respBytes;
++
++        if (data.isInitial()) {
++            // hardcode a response for the initial data (index 2-5 & last 4 bytes is UID)
++            // 7AB4ABDC is used as an example here
++            respBytes = new byte[]{
++                 0x33, 0x04, (byte) 0x7a, (byte) 0xb4, (byte) 0xab, (byte) 0xdc, 0x32, 0x01, 0x28, 0x30, 0x01, 0x04, 0x31, 0x01, 0x00, 0x59, 0x0B, 0x20, (byte) 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, (byte) 0x7a, (byte) 0xb4, (byte) 0xab, (byte) 0xdc
++            };
++            // Or... directly use the data from the card cloned, some phones & NFC chips might not work with this
++            // respBytes = data.getData();
++        } else if (data.getData()[1] == (byte) 0xa4 && data.getData()[2] == 0x04 && data.getData()[4] == 0x0f) {
++            // hardcoded response from sniffed data
++            respBytes = new byte[]{
++                    (byte)0x6F, (byte)0x52, (byte)0x84, (byte)0x0F, (byte)0xD1, (byte)0x56, (byte)0x00, (byte)0x00, (byte)0x01, (byte)0xBD, (byte)0xF0, (byte)0xCA, (byte)0xCB, (byte)0xB4, (byte)0xEF, (byte)0xD6,
++                    (byte)0xA7, (byte)0xB8, (byte)0xB6, (byte)0xA5, (byte)0x3F, (byte)0x9F, (byte)0x08, (byte)0x01, (byte)0x02, (byte)0x9F, (byte)0x0C, (byte)0x38, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
++                    (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x50, (byte)0x82, (byte)0x18, (byte)0x32, (byte)0x30, (byte)0x30, (byte)0x33, (byte)0x39, (byte)0x32, (byte)0x33, (byte)0x33, (byte)0x00, (byte)0x00,
++                    (byte)0x03, (byte)0x20, (byte)0x23, (byte)0x10, (byte)0x16, (byte)0x00, (byte)0x00, (byte)0x46, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x0A, (byte)0x43,
++                    (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x20, (byte)0x25, (byte)0x08, (byte)0x29, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x03, (byte)0x00,
++                    (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x90, (byte)0x00
++            };
++        } else if (data.getData()[0] == (byte) 0x80 && data.getData()[1] == 0x50 && data.getData()[2] == 0x01) {
++            respBytes = new byte[] {
++                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, (byte)0xE8, 0x0B, 0x33, 0x5E, (byte)0x90, 0x00
++            };
++        } else if (data.getData()[0] == (byte) 0x80 && data.getData()[1] == 0x50 && data.getData()[2] == 0x00) {
++            respBytes = new byte[]{
++                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, (byte)0xD3, 0x59, 0x38, 0x0B, 0x40, (byte)0xE1, (byte)0xE9, 0x2C, (byte)0x90, 0x00
++            };
++        } else {
++            // defaults to 0x9000 success response
++            respBytes = new byte[]{(byte) 0x90, 0x00};
++        }
++
++        Log.d("OnCloneTagData", "Response: " + bytesToHex(respBytes));
++        NfcComm resp = new NfcComm(data.isCard(), data.isInitial(), respBytes);
++        mManager.applyData(resp);
+     }
+ 
+     @Override
