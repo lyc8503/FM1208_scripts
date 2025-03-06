@@ -1,0 +1,42 @@
+diff --git a/armsrc/iso14443a.c b/armsrc/iso14443a.c
+index 9d282eee6..18f85633f 100644
+--- a/armsrc/iso14443a.c
++++ b/armsrc/iso14443a.c
+@@ -1486,8 +1486,8 @@ void SimulateIso14443aTag(uint8_t tagType, uint16_t flags, uint8_t *useruid, uin
+ 
+     // Allocate 512 bytes for the dynamic modulation, created when the reader queries for it
+     // Such a response is less time critical, so we can prepare them on the fly
+-#define DYNAMIC_RESPONSE_BUFFER_SIZE 64
+-#define DYNAMIC_MODULATION_BUFFER_SIZE 512
++#define DYNAMIC_RESPONSE_BUFFER_SIZE 128
++#define DYNAMIC_MODULATION_BUFFER_SIZE 1024
+ 
+     uint8_t *dynamic_response_buffer = BigBuf_calloc(DYNAMIC_RESPONSE_BUFFER_SIZE);
+     if (dynamic_response_buffer == NULL) {
+@@ -1916,9 +1916,24 @@ void SimulateIso14443aTag(uint8_t tagType, uint16_t flags, uint8_t *useruid, uin
+                     case 0x0A: { // IBlock (command CID)
+                         dynamic_response_info.response[0] = receivedCmd[0];
+                         dynamic_response_info.response[1] = 0x00;
+-                        dynamic_response_info.response[2] = 0x90;
+-                        dynamic_response_info.response[3] = 0x00;
+-                        dynamic_response_info.response_n = 4;
++                        if (receivedCmd[3] == 0xa4 && receivedCmd[4] == 0x04 && receivedCmd[6] == 0x0f) {
++                            // select DF, hardcoded response
++                            unsigned char hexData[86] = {
++                                0x6F, 0x52, 0x84, 0x0F, 0xD1, 0x56, 0x00, 0x00, 0x01, 0xBD, 0xF0, 0xCA, 0xCB, 0xB4, 0xEF, 0xD6,
++                                0xA7, 0xB8, 0xB6, 0xA5, 0x3F, 0x9F, 0x08, 0x01, 0x02, 0x9F, 0x0C, 0x38, 0x00, 0x00, 0x00, 0x00,
++                                0x00, 0x00, 0x00, 0x50, 0x82, 0x18, 0x32, 0x30, 0x30, 0x33, 0x39, 0x32, 0x33, 0x33, 0x00, 0x00,
++                                0x03, 0x20, 0x23, 0x10, 0x16, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x43,
++                                0x00, 0x00, 0x00, 0x00, 0x20, 0x25, 0x08, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00,
++                                0x00, 0x00, 0x00, 0x00, 0x90, 0x00 
++                            };
++                            memcpy(dynamic_response_info.response + 2, hexData, 86);
++                            dynamic_response_info.response_n = 88;
++                        } else {
++                            // defaults to a success (90 00)
++                            dynamic_response_info.response[2] = 0x90;
++                            dynamic_response_info.response[3] = 0x00;
++                            dynamic_response_info.response_n = 4;
++                        }
+                     }
+                     break;
